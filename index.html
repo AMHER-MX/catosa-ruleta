@@ -255,17 +255,16 @@
     height:280px;
     margin:0 auto;
   }
+  .wheel-wrap{filter:drop-shadow(0 10px 22px rgba(0,0,0,0.55));}
   .pointer{
     position:absolute;
-    top:-6px; left:50%;
+    top:-2px; left:50%;
     transform:translateX(-50%);
-    width:0; height:0;
-    border-left:14px solid transparent;
-    border-right:14px solid transparent;
-    border-top:22px solid var(--gold);
+    width:22px; height:30px;
     z-index:5;
-    filter:drop-shadow(0 2px 3px rgba(0,0,0,0.5));
+    filter:drop-shadow(0 2px 3px rgba(0,0,0,0.6));
   }
+  .pointer svg{width:100%; height:100%; display:block;}
   .wheel{
     width:100%;
     height:100%;
@@ -274,12 +273,20 @@
   .hub{
     position:absolute;
     top:50%; left:50%;
-    width:52px; height:52px;
-    background:radial-gradient(circle at 35% 30%, #e8e8e8, #8a8f93 60%, #5b6165);
+    width:58px; height:58px;
+    background:radial-gradient(circle at 35% 30%, #f2f2f2, #9aa0a4 55%, #565c60);
     border-radius:50%;
     transform:translate(-50%,-50%);
     z-index:4;
-    box-shadow:0 0 0 4px #1c1f22, 0 3px 6px rgba(0,0,0,0.5);
+    box-shadow:0 0 0 5px #14171a, inset 0 -3px 6px rgba(0,0,0,0.35), 0 3px 8px rgba(0,0,0,0.5);
+  }
+  .hub::after{
+    content:"";
+    position:absolute;
+    inset:14px;
+    border-radius:50%;
+    background:radial-gradient(circle at 40% 35%, #d7d7d7, #7a8085);
+    box-shadow:inset 0 2px 3px rgba(0,0,0,0.4);
   }
   .spin-btn-wrap{margin-top:26px; width:100%;}
 
@@ -417,8 +424,21 @@
 
       <div class="wheel-stage">
         <div class="wheel-wrap">
-          <div class="pointer"></div>
-          <svg class="wheel" id="wheel" viewBox="0 0 280 280"></svg>
+          <div class="pointer">
+            <svg viewBox="0 0 22 30" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="ptrGrad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stop-color="#c98f00"/>
+                  <stop offset="45%" stop-color="#ffd75e"/>
+                  <stop offset="55%" stop-color="#ffd75e"/>
+                  <stop offset="100%" stop-color="#a86e00"/>
+                </linearGradient>
+              </defs>
+              <path d="M11 30 L1 8 A11 9 0 0 1 21 8 Z" fill="url(#ptrGrad)" stroke="#1c1f22" stroke-width="1"/>
+              <circle cx="11" cy="8" r="2.4" fill="#1c1f22"/>
+            </svg>
+          </div>
+          <svg class="wheel" id="wheel" viewBox="0 0 300 300"></svg>
           <div class="hub"></div>
         </div>
       </div>
@@ -465,18 +485,19 @@
   const FACEBOOK_URL = "https://www.facebook.com/CatosaOficial"; // TODO: reemplazar con la página real
 
   // weight = probabilidad relativa (no necesita sumar 100)
+  // label = texto corto que va curveado dentro del segmento
+  // full  = nombre completo que se muestra en el resultado y en el código de canje
   const PRIZES = [
-    { label: "Gorra Catosa",              weight: 20 },
-    { label: "Llavero Catosa",            weight: 22 },
-    { label: "Sigue participando",        weight: 18 },
-    { label: "Termo Catosa",              weight: 15 },
-    { label: "10% dto. en filtro de aceite", weight: 12 },
-    { label: "Playera Catosa",            weight: 8  },
-    { label: "Sigue participando",        weight: 12 },
-    { label: "Cambio de aceite GRATIS",   weight: 3  },
+    { label: "Gorra",      full: "Gorra Catosa",                 weight: 20 },
+    { label: "Llavero",    full: "Llavero Catosa",                weight: 22 },
+    { label: "¡Casi!",     full: "Sigue participando",            weight: 18 },
+    { label: "Termo",      full: "Termo Catosa",                  weight: 15 },
+    { label: "10% Dto",   full: "10% dto. en filtro de aceite",  weight: 12 },
+    { label: "Playera",    full: "Playera Catosa",                weight: 8  },
+    { label: "Suerte",     full: "Sigue participando",            weight: 12 },
+    { label: "Aceite",     full: "Cambio de aceite GRATIS",       weight: 3  },
   ];
 
-  const SEGMENT_COLORS = ["#2f353a", "#3a4147"]; // alternando, estilo rin metálico
   const N = PRIZES.length;
   const SEG_ANGLE = 360 / N;
 
@@ -514,44 +535,93 @@
   /* =========================================================
      Dibujar la ruleta (SVG, estilo rin de camión)
      ========================================================= */
+  function polar(cx, cy, r, angleDeg){
+    const rad = angleDeg * Math.PI / 180;
+    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+  }
+
   function buildWheel(){
     const svg = document.getElementById("wheel");
-    const cx = 140, cy = 140, r = 130;
-    let html = "";
+    const cx = 150, cy = 150;
+    const rSeg = 120;     // radio de la cara pintada
+    const rBezel = 126;   // centro del aro cromado
+    const rTire = 140;    // centro de la llanta
+    const rText = 96;     // radio donde corre el texto
+    const rLug = 126;     // radio de los birlos (sobre el aro cromado)
+    const textPad = 2.5;  // grados de margen a cada lado del texto
+
+    let defs = `
+      <defs>
+        <radialGradient id="segA" cx="35%" cy="30%" r="75%">
+          <stop offset="0%" stop-color="#3d444a"/>
+          <stop offset="100%" stop-color="#262b2f"/>
+        </radialGradient>
+        <radialGradient id="segB" cx="35%" cy="30%" r="75%">
+          <stop offset="0%" stop-color="#474f56"/>
+          <stop offset="100%" stop-color="#2f353a"/>
+        </radialGradient>
+        <linearGradient id="chromeRing" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#e8e9ea"/>
+          <stop offset="30%" stop-color="#8b9095"/>
+          <stop offset="50%" stop-color="#f5f5f5"/>
+          <stop offset="70%" stop-color="#7d8287"/>
+          <stop offset="100%" stop-color="#c9cbcd"/>
+        </linearGradient>
+        <radialGradient id="lugGrad" cx="35%" cy="30%" r="75%">
+          <stop offset="0%" stop-color="#f0f0f0"/>
+          <stop offset="100%" stop-color="#6e7378"/>
+        </radialGradient>
+      </defs>`;
+
+    // llanta (rodadura) — anillo de hule con bloques de dibujo
+    let tire = `
+      <circle cx="${cx}" cy="${cy}" r="${rTire}" fill="none" stroke="#0d0f10" stroke-width="18"/>
+      <circle cx="${cx}" cy="${cy}" r="${rTire}" fill="none" stroke="#212426" stroke-width="18" stroke-dasharray="3 7"/>
+      <circle cx="${cx}" cy="${cy}" r="${rTire+8.5}" fill="none" stroke="#050607" stroke-width="2"/>
+      <circle cx="${cx}" cy="${cy}" r="${rTire-8.5}" fill="none" stroke="#050607" stroke-width="2"/>`;
+
+    let segments = "";
+    let texts = "";
+    let lugs = "";
+
     for (let i = 0; i < N; i++){
       const startAngle = i * SEG_ANGLE - 90;
       const endAngle = startAngle + SEG_ANGLE;
-      const x1 = cx + r * Math.cos(startAngle * Math.PI/180);
-      const y1 = cy + r * Math.sin(startAngle * Math.PI/180);
-      const x2 = cx + r * Math.cos(endAngle * Math.PI/180);
-      const y2 = cy + r * Math.sin(endAngle * Math.PI/180);
+      const p1 = polar(cx, cy, rSeg, startAngle);
+      const p2 = polar(cx, cy, rSeg, endAngle);
       const largeArc = SEG_ANGLE > 180 ? 1 : 0;
-      const color = SEGMENT_COLORS[i % 2];
+      const fill = i % 2 === 0 ? "url(#segA)" : "url(#segB)";
 
-      html += `<path d="M${cx},${cy} L${x1.toFixed(2)},${y1.toFixed(2)} A${r},${r} 0 ${largeArc} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z" fill="${color}" stroke="#1c1f22" stroke-width="2"/>`;
+      segments += `<path d="M${cx},${cy} L${p1.x.toFixed(2)},${p1.y.toFixed(2)} A${rSeg},${rSeg} 0 ${largeArc} 1 ${p2.x.toFixed(2)},${p2.y.toFixed(2)} Z" fill="${fill}" stroke="#14171a" stroke-width="1.5"/>`;
 
-      // texto del premio, orientado radialmente
+      // arco invisible para que el texto siga la curvatura del segmento
       const midAngle = startAngle + SEG_ANGLE/2;
-      const tx = cx + (r*0.62) * Math.cos(midAngle * Math.PI/180);
-      const ty = cy + (r*0.62) * Math.sin(midAngle * Math.PI/180);
-      html += `<text x="${tx.toFixed(2)}" y="${ty.toFixed(2)}" fill="#f4f1ea" font-size="9.5" font-family="Inter, sans-serif" font-weight="600" text-anchor="middle" transform="rotate(${midAngle+90}, ${tx.toFixed(2)}, ${ty.toFixed(2)})">${wrapLabel(PRIZES[i].label)}</text>`;
+      const midRad = midAngle * Math.PI/180;
+      const bottomHalf = Math.sin(midRad) > 0;
+      const a1 = startAngle + textPad;
+      const a2 = endAngle - textPad;
+      const tp1 = polar(cx, cy, rText, bottomHalf ? a2 : a1);
+      const tp2 = polar(cx, cy, rText, bottomHalf ? a1 : a2);
+      const sweep = bottomHalf ? 0 : 1;
+      const arcId = `arcSeg${i}`;
 
-      // "birlo" (lug nut) en el borde de cada segmento
-      const bx = cx + (r*0.94) * Math.cos(startAngle * Math.PI/180);
-      const by = cy + (r*0.94) * Math.sin(startAngle * Math.PI/180);
-      html += `<circle cx="${bx.toFixed(2)}" cy="${by.toFixed(2)}" r="3.2" fill="#8a8f93"/>`;
+      texts += `<path id="${arcId}" d="M${tp1.x.toFixed(2)},${tp1.y.toFixed(2)} A${rText},${rText} 0 0 ${sweep} ${tp2.x.toFixed(2)},${tp2.y.toFixed(2)}" fill="none" stroke="none"/>`;
+      texts += `<text font-family="Oswald, sans-serif" font-weight="600" font-size="10.8" fill="#f4f1ea" letter-spacing="0.2">
+        <textPath href="#${arcId}" startOffset="50%" text-anchor="middle">${escapeXml(PRIZES[i].label)}</textPath>
+      </text>`;
+
+      // birlo en el aro cromado, en cada división de segmento
+      const lp = polar(cx, cy, rLug, startAngle);
+      lugs += `<circle cx="${lp.x.toFixed(2)}" cy="${lp.y.toFixed(2)}" r="4.4" fill="url(#lugGrad)" stroke="#3a3d40" stroke-width="0.6"/>`;
     }
-    svg.innerHTML = html;
+
+    const bezel = `<circle cx="${cx}" cy="${cy}" r="${rBezel}" fill="none" stroke="url(#chromeRing)" stroke-width="9"/>`;
+
+    svg.innerHTML = defs + tire + bezel + segments + texts + lugs;
   }
 
-  function wrapLabel(label){
-    // corta etiquetas largas en 2 líneas usando tspans
-    if (label.length <= 12) return label;
-    const words = label.split(" ");
-    const mid = Math.ceil(words.length/2);
-    const l1 = words.slice(0,mid).join(" ");
-    const l2 = words.slice(mid).join(" ");
-    return `<tspan x="0" dy="-3">${l1}</tspan><tspan x="0" dy="10">${l2}</tspan>`;
+  function escapeXml(str){
+    return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   }
 
   /* =========================================================
@@ -588,7 +658,7 @@
     wheel.style.transform = `rotate(${finalRotation}deg)`;
 
     setTimeout(()=>{
-      const prize = PRIZES[winIndex].label;
+      const prize = PRIZES[winIndex].full;
       document.getElementById("resultPrize").textContent = prize;
       document.getElementById("resultCard").style.display = "block";
       document.getElementById("finalPrize").textContent = prize;
