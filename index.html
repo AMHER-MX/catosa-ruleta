@@ -365,7 +365,7 @@
     <section class="step active" data-step="1">
       <p class="eyebrow">Promoción activa</p>
       <h1>Gira la ruleta y llévate un premio Catosa</h1>
-      <p class="desc">Participa gratis. Solo necesitas seguirnos en Facebook y darnos tu número para entregarte tu premio en mostrador.</p>
+      <p class="desc">Participa gratis. Solo necesitas seguirnos en Facebook y decirnos el nombre de tu empresa para entregarte tu premio en mostrador.</p>
 
       <div class="promo-card">
         <div class="tag">Sucursal Torreón · Refacciones</div>
@@ -400,20 +400,20 @@
       <button class="primary" id="fbContinueBtn" disabled onclick="goStep(3)">Continuar</button>
     </section>
 
-    <!-- STEP 3: Telefono -->
+    <!-- STEP 3: Empresa -->
     <section class="step" data-step="3">
       <p class="eyebrow">Paso 2 de 3</p>
-      <h1>Déjanos tu número</h1>
-      <p class="desc">Lo usamos para identificar tu premio y evitar giros duplicados. No se comparte ni se usa para nada más.</p>
+      <h1>¿De qué empresa nos visitas?</h1>
+      <p class="desc">Lo usamos para identificar tu premio en mostrador.</p>
 
       <div class="field">
-        <label for="phoneInput">Celular (10 dígitos)</label>
-        <input type="tel" id="phoneInput" placeholder="871 000 0000" maxlength="10" inputmode="numeric" oninput="validatePhone()">
-        <div class="hint" id="phoneHint">Ejemplo: 8711234567</div>
+        <label for="companyInput">Nombre de tu empresa</label>
+        <input type="text" id="companyInput" placeholder="Ej. Transportes López" maxlength="60" oninput="validateCompany()">
+        <div class="hint" id="companyHint">&nbsp;</div>
       </div>
 
       <div style="flex:1"></div>
-      <button class="primary" id="phoneContinueBtn" disabled onclick="goStep(4)">Ir a la ruleta</button>
+      <button class="primary" id="companyContinueBtn" disabled onclick="goStep(4)">Ir a la ruleta</button>
     </section>
 
     <!-- STEP 4: Ruleta -->
@@ -482,20 +482,23 @@
   /* =========================================================
      CONFIGURACIÓN — editar aquí para cambiar premios / liga
      ========================================================= */
-  const FACEBOOK_URL = "https://www.facebook.com/CatosaOficial"; // TODO: reemplazar con la página real
+  const FACEBOOK_URL = "https://www.facebook.com/catosamx";
 
-  // weight = probabilidad relativa (no necesita sumar 100)
-  // label = texto corto que va curveado dentro del segmento
-  // full  = nombre completo que se muestra en el resultado y en el código de canje
+  // TODO: pega aquí la URL /exec que te da Google Apps Script al publicar
+  // catosa-ruleta-backend.gs (Deploy → New deployment → Web app → Anyone).
+  const BACKEND_URL = "https://script.google.com/macros/s/AKfycbzd6u7-oaYGOmn8ErhXRis-a1fYHZ9e1ZqWVNoeRz-AJKMlo1ttZfGmds0gnNz9VHCv/exec";
+
+  // El orden y los "id" DEBEN coincidir exactamente con las filas de la
+  // pestaña "Premios" del Google Sheet — el servidor decide el premio y
+  // regresa el id; aquí solo lo usamos para saber en qué segmento parar
+  // la ruleta. label = texto corto curveado en el segmento.
   const PRIZES = [
-    { label: "Gorra",      full: "Gorra Catosa",                 weight: 20 },
-    { label: "Llavero",    full: "Llavero Catosa",                weight: 22 },
-    { label: "¡Casi!",     full: "Sigue participando",            weight: 18 },
-    { label: "Termo",      full: "Termo Catosa",                  weight: 15 },
-    { label: "10% Dto",   full: "10% dto. en filtro de aceite",  weight: 12 },
-    { label: "Playera",    full: "Playera Catosa",                weight: 8  },
-    { label: "Suerte",     full: "Sigue participando",            weight: 12 },
-    { label: "Aceite",     full: "Cambio de aceite GRATIS",       weight: 3  },
+    { id:"jersey",   label:"Jersey" },
+    { id:"gorra",    label:"Gorra" },
+    { id:"kit",      label:"Kit Intl" },
+    { id:"termo",    label:"Termo" },
+    { id:"llavero",  label:"Llavero" },
+    { id:"cuaderno", label:"Cuaderno" },
   ];
 
   const N = PRIZES.length;
@@ -521,14 +524,13 @@
     document.getElementById("fbContinueBtn").disabled = !document.getElementById("fbConfirm").checked;
   }
 
-  function validatePhone(){
-    const input = document.getElementById("phoneInput");
-    const hint = document.getElementById("phoneHint");
-    const btn = document.getElementById("phoneContinueBtn");
-    input.value = input.value.replace(/\D/g,"").slice(0,10);
-    const ok = input.value.length === 10;
-    hint.textContent = ok ? "Número válido" : "Ejemplo: 8711234567";
-    hint.classList.toggle("error", input.value.length > 0 && !ok);
+  function validateCompany(){
+    const input = document.getElementById("companyInput");
+    const hint = document.getElementById("companyHint");
+    const btn = document.getElementById("companyContinueBtn");
+    const ok = input.value.trim().length >= 2;
+    hint.textContent = ok ? "\u00a0" : "Escribe el nombre de tu empresa";
+    hint.classList.toggle("error", input.value.trim().length > 0 && !ok);
     btn.disabled = !ok;
   }
 
@@ -625,31 +627,52 @@
   }
 
   /* =========================================================
-     Lógica de giro
-     NOTA: aquí es donde en producción se llamaría a
-     POST /api/ruleta/girar { telefono, sucursal }
-     y el servidor regresaría el premio real + código,
-     en vez de decidirlo en el navegador.
+     Lógica de giro — el premio y el código los decide el
+     backend (Google Apps Script), nunca el navegador. Así
+     el stock se comparte entre todos los celulares y nadie
+     puede forzar el premio inspeccionando el código.
      ========================================================= */
   let hasSpun = false;
 
-  function weightedRandomIndex(items){
-    const total = items.reduce((s,p)=>s+p.weight, 0);
-    let r = Math.random() * total;
-    for (let i=0;i<items.length;i++){
-      if (r < items[i].weight) return i;
-      r -= items[i].weight;
-    }
-    return items.length - 1;
-  }
-
-  function spin(){
+  async function spin(){
     if (hasSpun) return;
     hasSpun = true;
-    document.getElementById("spinBtn").disabled = true;
+    const btn = document.getElementById("spinBtn");
+    btn.disabled = true;
+    btn.textContent = "Girando…";
 
-    const winIndex = weightedRandomIndex(PRIZES);
-    const segCenter = winIndex * SEG_ANGLE + SEG_ANGLE/2;
+    const empresa = document.getElementById("companyInput").value.trim() || "Cliente";
+
+    let data;
+    try{
+      const resp = await fetch(BACKEND_URL, {
+        method: "POST",
+        body: JSON.stringify({ empresa })
+        // Sin header de Content-Type a propósito: así el navegador lo manda
+        // como text/plain y Apps Script no bloquea la petición por CORS.
+      });
+      data = await resp.json();
+    } catch(err){
+      btn.textContent = "Girar la ruleta";
+      btn.disabled = false;
+      hasSpun = false;
+      alert("No se pudo conectar. Revisa tu conexión e intenta de nuevo.");
+      return;
+    }
+
+    if (!data || !data.ok){
+      btn.textContent = "Girar la ruleta";
+      btn.disabled = false;
+      hasSpun = false;
+      alert(data && data.error === "sin_stock"
+        ? "Por ahora no hay premios disponibles, intenta más tarde."
+        : "Ocurrió un error, intenta de nuevo.");
+      return;
+    }
+
+    const winIndex = PRIZES.findIndex(p => p.id === data.id);
+    const safeIndex = winIndex === -1 ? 0 : winIndex;
+    const segCenter = safeIndex * SEG_ANGLE + SEG_ANGLE/2;
     const fullSpins = 5 * 360;
     const jitter = (Math.random() * (SEG_ANGLE*0.6)) - (SEG_ANGLE*0.3);
     const finalRotation = fullSpins + (360 - segCenter) + jitter;
@@ -658,19 +681,11 @@
     wheel.style.transform = `rotate(${finalRotation}deg)`;
 
     setTimeout(()=>{
-      const prize = PRIZES[winIndex].full;
-      document.getElementById("resultPrize").textContent = prize;
+      document.getElementById("resultPrize").textContent = data.premio;
       document.getElementById("resultCard").style.display = "block";
-      document.getElementById("finalPrize").textContent = prize;
-      document.getElementById("finalCode").textContent = generateCode();
+      document.getElementById("finalPrize").textContent = data.premio;
+      document.getElementById("finalCode").textContent = data.codigo;
     }, 4300);
-  }
-
-  function generateCode(){
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sin caracteres ambiguos
-    let code = "CAT-";
-    for (let i=0;i<5;i++) code += chars[Math.floor(Math.random()*chars.length)];
-    return code;
   }
 
   buildWheel();
